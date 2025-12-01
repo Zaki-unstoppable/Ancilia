@@ -14,10 +14,11 @@ const BASE_THICKNESS = 0.004; // 4 mm carbon fiber / anodized aluminium
 const SUBSTRATE_THICKNESS = 0.0016; // fused silica / borosilicate
 const PANEL_THICKNESS = 0.0025; // electrode mesh layer encapsulation
 const COVER_THICKNESS = 0.0012; // transparent protective cap
+const COVER_OFFSET = 0.0009; // visible separation between cover and panel
 
 const LANE_COUNT = 12;
 const LANE_WIDTH = 0.018;
-const LANE_HEIGHT = 0.0024;
+const LANE_HEIGHT = 0.0022;
 const CABLE_RADIUS = 0.012;
 const CABLE_SWEEP = 0.35;
 
@@ -35,6 +36,7 @@ const FIELD_LATERAL = 3.1e4; // V/m lateral push along the lanes
 const WAVE_FREQUENCY = 42; // Hz, scaled for visual legibility
 const PHASE_SHIFT = (2 * Math.PI) / 3; // travelling wave between adjacent lanes
 const DRAG_COEFF = 0.45;
+const DIRECTIONAL_DRIFT = new THREE.Vector3(0.15, 0, -0.08); // bias dust toward a collector edge
 const TRENCH_INNER_SCALE = 1.02; // dust runs off the panel into the trench just beyond the active area
 const TRENCH_OUTER_SCALE = 1.12; // removable cartridge span
 const CARTRIDGE_HEIGHT = 0.012;
@@ -332,10 +334,15 @@ function createElectrodeLanes(material: THREE.Material, yPosition: number) {
     const lane = new THREE.Mesh(laneGeom, material);
     const angle = (i / ELECTRODE_SEGMENTS) * Math.PI * 2;
     lane.rotation.y = angle;
-    lane.position.y = yPosition;
+    lane.position.y = yPosition - 0.0006;
     lane.castShadow = true;
     lane.receiveShadow = true;
     group.add(lane);
+
+    const laneEdge = new LineSegments(new EdgesGeometry(laneGeom, 12), new LineBasicMaterial({ color: 0x3a2b1c }));
+    laneEdge.position.copy(lane.position);
+    laneEdge.rotation.copy(lane.rotation);
+    group.add(laneEdge);
   }
 
   const ringGeom = new THREE.RingGeometry(HEX_APOTHEM * 0.25, HEX_APOTHEM * 0.48, 48, 1);
@@ -372,14 +379,15 @@ function createModule(scene: THREE.Scene): { group: THREE.Group; materials: Modu
   const substrateMaterial = new THREE.MeshPhysicalMaterial({
     color: 0x4466aa,
     transparent: true,
-    transmission: 0.75,
+    transmission: 0.78,
     opacity: 0.82,
     metalness: 0.05,
-    roughness: 0.12,
-    clearcoat: 0.4,
-    clearcoatRoughness: 0.25,
+    roughness: 0.16,
+    clearcoat: 0.42,
+    clearcoatRoughness: 0.28,
     ior: 1.48,
-    envMapIntensity: 1.2
+    envMapIntensity: 1.3,
+    thickness: SUBSTRATE_THICKNESS
   });
 
   const panelMaterial = new THREE.MeshStandardMaterial({
@@ -392,25 +400,29 @@ function createModule(scene: THREE.Scene): { group: THREE.Group; materials: Modu
   });
 
   const laneMaterial = new THREE.MeshStandardMaterial({
-    color: 0x2b241c,
-    metalness: 0.92,
-    roughness: 0.22,
-    emissive: new THREE.Color(0x5a3505),
-    emissiveIntensity: 0.18
+    color: 0x1f1810,
+    metalness: 0.95,
+    roughness: 0.18,
+    emissive: new THREE.Color(0x6b3e05),
+    emissiveIntensity: 0.26,
+    bumpMap: bumpTexture,
+    bumpScale: 0.12
   });
 
   const coverMaterial = new THREE.MeshPhysicalMaterial({
     color: 0xa5bfff,
     transparent: true,
     transmission: 0.98,
-    opacity: 0.6,
-    roughness: 0.02,
-    metalness: 0.05,
-    clearcoat: 0.9,
-    clearcoatRoughness: 0.03,
+    opacity: 0.62,
+    roughness: 0.018,
+    metalness: 0.07,
+    clearcoat: 0.95,
+    clearcoatRoughness: 0.028,
     ior: 1.52,
     thickness: COVER_THICKNESS,
-    envMapIntensity: 1.5
+    attenuationColor: new THREE.Color(0xd6e7ff),
+    attenuationDistance: 0.3,
+    envMapIntensity: 1.8
   });
 
   // Base structural plate with beveled edge
@@ -455,7 +467,7 @@ function createModule(scene: THREE.Scene): { group: THREE.Group; materials: Modu
   const substrateGeom = makeHexExtrude(SUBSTRATE_THICKNESS, 0.96);
   substrateGeom.rotateX(Math.PI / 2);
   const substrate = new THREE.Mesh(substrateGeom, substrateMaterial);
-  substrate.position.y = BASE_THICKNESS + SUBSTRATE_THICKNESS / 2;
+  substrate.position.y = BASE_THICKNESS + SUBSTRATE_THICKNESS / 2 + 0.00025;
   substrate.castShadow = true;
   substrate.receiveShadow = true;
   group.add(substrate);
@@ -471,7 +483,7 @@ function createModule(scene: THREE.Scene): { group: THREE.Group; materials: Modu
   const panelGeom = makeHexExtrude(PANEL_THICKNESS, 0.94);
   panelGeom.rotateX(Math.PI / 2);
   const panel = new THREE.Mesh(panelGeom, panelMaterial);
-  panel.position.y = BASE_THICKNESS + SUBSTRATE_THICKNESS + PANEL_THICKNESS / 2;
+  panel.position.y = BASE_THICKNESS + SUBSTRATE_THICKNESS + PANEL_THICKNESS / 2 + 0.0002;
   panel.castShadow = true;
   panel.receiveShadow = true;
   group.add(panel);
@@ -487,7 +499,7 @@ function createModule(scene: THREE.Scene): { group: THREE.Group; materials: Modu
   const coverGeom = makeHexExtrude(COVER_THICKNESS, 0.96, true);
   coverGeom.rotateX(Math.PI / 2);
   const cover = new THREE.Mesh(coverGeom, coverMaterial);
-  cover.position.y = panel.position.y + PANEL_THICKNESS / 2 + COVER_THICKNESS / 2 + 0.0008;
+  cover.position.y = panel.position.y + PANEL_THICKNESS / 2 + COVER_THICKNESS / 2 + COVER_OFFSET;
   cover.castShadow = true;
   cover.receiveShadow = true;
   group.add(cover);
@@ -564,7 +576,7 @@ function createModule(scene: THREE.Scene): { group: THREE.Group; materials: Modu
     emissiveIntensity: 0.2
   });
 
-  const railGeom = new RoundedBoxGeometry(0.12, 0.04, 0.08, 2, 0.01);
+  const railGeom = new RoundedBoxGeometry(0.12, 0.04, 0.08, 4, 0.014);
   const pogoGeom = new THREE.CylinderGeometry(0.005, 0.005, 0.02, 10);
   const edgeVerts = hexVertices(1.02);
   for (let i = 0; i < edgeVerts.length; i++) {
@@ -597,6 +609,20 @@ function createModule(scene: THREE.Scene): { group: THREE.Group; materials: Modu
   shell.receiveShadow = true;
   group.add(shell);
 
+  const socketBaseGeom = new RoundedBoxGeometry(0.09, 0.018, 0.06, 5, 0.006);
+  socketBaseGeom.rotateZ(Math.PI / 2);
+  const socketBase = new THREE.Mesh(socketBaseGeom, dockingMat);
+  socketBase.position.set(shell.position.x - 0.012, BASE_THICKNESS + 0.021, shell.position.z);
+  socketBase.castShadow = true;
+  socketBase.receiveShadow = true;
+  group.add(socketBase);
+
+  const grommetGeom = new THREE.TorusGeometry(0.032, 0.005, 12, 24);
+  const grommet = new THREE.Mesh(grommetGeom, conduitMat);
+  grommet.rotation.y = Math.PI / 2;
+  grommet.position.copy(shell.position);
+  group.add(grommet);
+
   const cableCurve = new THREE.QuadraticBezierCurve3(
     new THREE.Vector3(shell.position.x + 0.05, BASE_THICKNESS + 0.05, shell.position.z),
     new THREE.Vector3(shell.position.x + CABLE_SWEEP * 0.4, BASE_THICKNESS + 0.08, shell.position.z + 0.06),
@@ -607,6 +633,13 @@ function createModule(scene: THREE.Scene): { group: THREE.Group; materials: Modu
   cable.castShadow = true;
   cable.receiveShadow = true;
   group.add(cable);
+
+  const cableShroudGeom = new THREE.TubeGeometry(cableCurve, 16, CABLE_RADIUS * 1.35, 8, false);
+  const cableShroud = new THREE.Mesh(cableShroudGeom, conduitMat.clone());
+  cableShroud.material.opacity = 0.7;
+  cableShroud.material.transparent = true;
+  cableShroud.position.y -= 0.002;
+  group.add(cableShroud);
 
   const materials: ModuleMaterials = {
     cover: coverMaterial,
@@ -721,7 +754,7 @@ function computeFieldAt(position: THREE.Vector3, time: number) {
 
   const radialDir = new THREE.Vector3(Math.cos(angle), 0, Math.sin(angle));
   const tangentDir = new THREE.Vector3(-Math.sin(angle), 0, Math.cos(angle));
-  const horizontal = radialDir.multiplyScalar(radialKick).add(tangentDir.multiplyScalar(tangential));
+  const horizontal = radialDir.multiplyScalar(radialKick).add(tangentDir.multiplyScalar(tangential)).add(DIRECTIONAL_DRIFT);
 
   return new THREE.Vector3(horizontal.x, Ey, horizontal.z);
 }
@@ -770,8 +803,20 @@ function stepDust(particles: DustParticle[], dt: number, time: number) {
 
     if (p.position.y < panelY) {
       p.position.y = panelY;
-      p.velocity.y *= -0.2;
+      p.velocity.y *= -0.22;
+      p.velocity.x *= 0.92;
+      p.velocity.z *= 0.92;
     }
+
+    const speed = p.velocity.length();
+    const stretch = THREE.MathUtils.clamp(1 + speed * 12, 1, 3.8);
+    if (speed > 1e-4) {
+      const dir = p.velocity.clone().normalize();
+      const quat = new THREE.Quaternion();
+      quat.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+      p.mesh.quaternion.copy(quat);
+    }
+    p.mesh.scale.set(1, Math.max(0.7, 1 + speed * 2.4), stretch);
 
     if (!isInsideHex(p.position, TRENCH_INNER_SCALE) && p.position.y < BASE_THICKNESS + CARTRIDGE_HEIGHT * 2) {
       if (isInsideHex(p.position, TRENCH_OUTER_SCALE)) {
@@ -820,6 +865,9 @@ export function initAncilliaScene(container: HTMLElement) {
   controls.dampingFactor = 0.1;
   controls.target.set(0, 0.25, 0);
 
+  const ambient = new THREE.AmbientLight(0x0d1018, 0.34);
+  scene.add(ambient);
+
   const hemi = new THREE.HemisphereLight(0xffffff, 0x1a1d27, 0.45);
   scene.add(hemi);
 
@@ -832,6 +880,12 @@ export function initAncilliaScene(container: HTMLElement) {
   const rimLight = new THREE.DirectionalLight(0x88aaff, 0.5);
   rimLight.position.set(-6, 5, -4);
   scene.add(rimLight);
+
+  const grazeLight = new THREE.DirectionalLight(0xb7ccff, 0.42);
+  grazeLight.position.set(3.4, 1.2, -3.8);
+  grazeLight.target.position.set(0, PANEL_SURFACE_Y, 0);
+  scene.add(grazeLight);
+  scene.add(grazeLight.target);
 
   const accent = new THREE.SpotLight(0xffe6c5, 0.55, 18, Math.PI / 6, 0.35, 1.2);
   accent.position.set(-3, 6, 3.4);
