@@ -78,4 +78,4 @@ With Vite running, subsequent `git pull` commands will trigger live reloads so y
 
 ## Merge hygiene
 
-If you ever resolve conflicts locally, make sure to remove any leftover `<<<<<<<`, `=======`, or `>>>>>>>` markers before committing. A quick `rg "<<<<<<<"` from the repo root will confirm the workspace is clean.
+If you resolve conflicts locally, ensure no Git conflict markers remain before committing. Running a quick ripgrep for common conflict artifacts from the repo root helps confirm the workspace is clean.
