@@ -1,4 +1,3 @@
-// src/ancillia-scene.ts
 // @ts-nocheck
 
 import * as THREE from 'three';
@@ -7,68 +6,66 @@ import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { EdgesGeometry, LineBasicMaterial, LineSegments } from 'three';
 
-/* -------------------------------------------------------------------------- */
-/*  GEOMETRY CONSTANTS – HEXAGON MODULE                                       */
-/* -------------------------------------------------------------------------- */
+// ─────────────────────────────────────────────────────────────
+// Geometric + stack constants (hex module)
+// ─────────────────────────────────────────────────────────────
 
-const HEX_FLAT = 0.38;        // flat-to-flat width (m)
-const HEX_POINT = 0.44;       // point-to-point width (m)
-const HEX_APOTHEM = HEX_FLAT / 2;
-const HEX_RADIUS = HEX_POINT / 2;
+const HEX_FLAT = 0.38; // flat-to-flat (m)
+const HEX_POINT = 0.44; // point-to-point (m)
+const HEX_APOTHEM = HEX_FLAT / 2; // center → flat
+const HEX_RADIUS = HEX_POINT / 2; // center → vertex
 
-const BASE_THICKNESS = 0.004;      // base structural plate
-const SUBSTRATE_THICKNESS = 0.0016;
-const PANEL_THICKNESS = 0.0025;    // electrode support layer
-const COVER_THICKNESS = 0.0012;
-const COVER_OFFSET = 0.0009;
+const BASE_THICKNESS = 0.004; // carbon fiber / anodized Al
+const SUBSTRATE_THICKNESS = 0.0016; // fused silica / borosilicate
+const PANEL_THICKNESS = 0.0025; // electrode encapsulation
+const COVER_THICKNESS = 0.0012; // transparent protective cap
+const COVER_OFFSET = 0.0009; // visible air gap
 
-const LANE_HEIGHT = 0.0022;
-const LANE_WIDTH = 0.018;
-const ELECTRODE_SEGMENTS = 6;      // radial travelling-wave segments
-
-const TRENCH_INNER_SCALE = 1.02;
-const TRENCH_OUTER_SCALE = 1.12;
+const TRENCH_INNER_SCALE = 1.02; // active area overflow
+const TRENCH_OUTER_SCALE = 1.12; // removable cartridge span
 const CARTRIDGE_HEIGHT = 0.012;
 
 const PANEL_SURFACE_Y =
-  BASE_THICKNESS / 2 +
+  BASE_THICKNESS +
   SUBSTRATE_THICKNESS +
-  PANEL_THICKNESS / 2;
+  PANEL_THICKNESS; // nominal electrode surface
 
-/* Cabling / conduit */
-const CABLE_RADIUS = 0.012;
-const CABLE_SWEEP = 0.35;
+// Radial traveling-wave electrode pattern
+const ELECTRODE_SEGMENTS = 12; // radial lanes
 
-/* -------------------------------------------------------------------------- */
-/*  DUST PHYSICS CONSTANTS – MARTIAN REGOLITH ANALOGUE                        */
-/* -------------------------------------------------------------------------- */
+// ─────────────────────────────────────────────────────────────
+// Dust physics + field constants
+// ─────────────────────────────────────────────────────────────
 
 const NUM_DUST_PARTICLES = 260;
 const DUST_RADIUS_MIN = 8e-6;
 const DUST_RADIUS_MAX = 38e-6;
-const DUST_DENSITY = 3100;       // kg/m^3 (basaltic regolith simulant)
-const DUST_CHARGE_MIN = 2e-15;   // Coulombs
-const DUST_CHARGE_MAX = 9e-14;   // Coulombs
-const ADHESION_PER_AREA = 50;    // N/m^2 -> ~1e-7 N at ~30 µm
-const MARTIAN_GRAVITY = 3.71;    // m/s^2
+const DUST_DENSITY = 3100; // kg/m^3 (basaltic simulant)
+const DUST_CHARGE_MIN = 2e-15;
+const DUST_CHARGE_MAX = 9e-14;
+const ADHESION_PER_AREA = 50; // N/m^2 → ~1e-7 N at ~30 µm
+const MARTIAN_GRAVITY = 3.71; // m/s^2
 
-/* Electric field structure – radial travelling wave */
-const FIELD_BASE = 1.2e5;        // vertical lift component V/m
-const FIELD_TRAVEL = 6.5e4;      // travelling component V/m
-const FIELD_LATERAL = 3.1e4;     // radial/tangential horizontal component V/m
-const WAVE_FREQUENCY = 42;       // Hz (visualized, not to scale with hardware)
-const PHASE_SHIFT = (2 * Math.PI) / 3;
+const FIELD_BASE = 1.2e5; // V/m vertical lift
+const FIELD_TRAVEL = 6.5e4; // V/m traveling component
+const FIELD_LATERAL = 3.1e4; // V/m tangential push
+const WAVE_FREQUENCY = 42; // Hz (visual scale)
+const PHASE_SHIFT = (2 * Math.PI) / 3; // between sectors
 const DRAG_COEFF = 0.45;
 
-/* Bias drift toward a “collector” region */
-const DIRECTIONAL_DRIFT = new THREE.Vector3(0.15, 0, -0.08);
+const DIRECTIONAL_DRIFT = new THREE.Vector3(
+  0.15,
+  0,
+  -0.08
+); // bias regolith to one edge / trench
 
-/* Bounds for respawn / collection */
-const BOUNDS_SCALE = TRENCH_OUTER_SCALE * 1.05;
+// Bounds for respawn / collection
+const BOUNDS_SCALE = TRENCH_OUTER_SCALE * 1.08;
+const MAX_DUST_HEIGHT = 2.5;
 
-/* -------------------------------------------------------------------------- */
-/*  MATERIAL PRESET TYPES                                                     */
-/* -------------------------------------------------------------------------- */
+// ─────────────────────────────────────────────────────────────
+// Types
+// ─────────────────────────────────────────────────────────────
 
 type ModuleMaterials = {
   cover: THREE.MeshPhysicalMaterial;
@@ -110,6 +107,10 @@ type ModePresets = {
   docking: MaterialPreset;
   conduit: MaterialPreset;
 };
+
+// ─────────────────────────────────────────────────────────────
+// Visual modes: concept vs blueprint
+// ─────────────────────────────────────────────────────────────
 
 const MODE_PRESETS: Record<'concept' | 'blueprint', ModePresets> = {
   blueprint: {
@@ -159,8 +160,16 @@ const MODE_PRESETS: Record<'concept' | 'blueprint', ModePresets> = {
       emissive: 0x332000,
       emissiveIntensity: 0.2
     },
-    docking: { color: 0x5a6472, metalness: 0.7, roughness: 0.35 },
-    conduit: { color: 0x1f222c, metalness: 0.4, roughness: 0.6 }
+    docking: {
+      color: 0x5a6472,
+      metalness: 0.7,
+      roughness: 0.35
+    },
+    conduit: {
+      color: 0x1f222c,
+      metalness: 0.4,
+      roughness: 0.6
+    }
   },
   concept: {
     cover: {
@@ -209,39 +218,50 @@ const MODE_PRESETS: Record<'concept' | 'blueprint', ModePresets> = {
       emissive: 0x221100,
       emissiveIntensity: 0.1
     },
-    docking: { color: 0x707a8c, metalness: 0.55, roughness: 0.48 },
-    conduit: { color: 0x373d47, metalness: 0.32, roughness: 0.62 }
+    docking: {
+      color: 0x707a8c,
+      metalness: 0.55,
+      roughness: 0.48
+    },
+    conduit: {
+      color: 0x373d47,
+      metalness: 0.32,
+      roughness: 0.62
+    }
   }
 };
-
-/* -------------------------------------------------------------------------- */
-/*  MATERIAL HELPERS                                                          */
-/* -------------------------------------------------------------------------- */
 
 function applyPreset(
   material: THREE.MeshPhysicalMaterial | THREE.MeshStandardMaterial,
   preset: MaterialPreset
 ) {
   if (preset.color !== undefined) material.color.set(preset.color);
-  if (preset.metalness !== undefined && 'metalness' in material)
+  if ('metalness' in material && preset.metalness !== undefined)
     material.metalness = preset.metalness;
-  if (preset.roughness !== undefined && 'roughness' in material)
+  if ('roughness' in material && preset.roughness !== undefined)
     material.roughness = preset.roughness;
   if ('transmission' in material && preset.transmission !== undefined)
-    (material as THREE.MeshPhysicalMaterial).transmission = preset.transmission;
+    (material as THREE.MeshPhysicalMaterial).transmission =
+      preset.transmission;
   if (preset.opacity !== undefined) material.opacity = preset.opacity;
   if ('clearcoat' in material && preset.clearcoat !== undefined)
     (material as THREE.MeshPhysicalMaterial).clearcoat = preset.clearcoat;
-  if ('clearcoatRoughness' in material && preset.clearcoatRoughness !== undefined)
+  if (
+    'clearcoatRoughness' in material &&
+    preset.clearcoatRoughness !== undefined
+  )
     (material as THREE.MeshPhysicalMaterial).clearcoatRoughness =
       preset.clearcoatRoughness;
-  if (preset.envMapIntensity !== undefined && 'envMapIntensity' in material)
-    (material as any).envMapIntensity = preset.envMapIntensity;
+  if ('envMapIntensity' in material && preset.envMapIntensity !== undefined)
+    material.envMapIntensity = preset.envMapIntensity;
   if ('emissive' in material && preset.emissive !== undefined)
     (material as THREE.MeshStandardMaterial).emissive = new THREE.Color(
       preset.emissive
     );
-  if ('emissiveIntensity' in material && preset.emissiveIntensity !== undefined)
+  if (
+    'emissiveIntensity' in material &&
+    preset.emissiveIntensity !== undefined
+  )
     (material as THREE.MeshStandardMaterial).emissiveIntensity =
       preset.emissiveIntensity;
   if ('ior' in material && preset.ior !== undefined)
@@ -277,16 +297,16 @@ function applyMode(
   }
 }
 
-/* -------------------------------------------------------------------------- */
-/*  TEXTURE HELPERS                                                           */
-/* -------------------------------------------------------------------------- */
+// ─────────────────────────────────────────────────────────────
+// Small procedural textures (no assets)
+// ─────────────────────────────────────────────────────────────
 
 function makeStripedBumpTexture(stripes = 24) {
   const size = 512;
   const canvas = document.createElement('canvas');
   canvas.width = canvas.height = size;
   const ctx = canvas.getContext('2d');
-  if (!ctx) throw new Error('Failed to create 2D context');
+  if (!ctx) throw new Error('No 2D context');
 
   ctx.fillStyle = '#808080';
   ctx.fillRect(0, 0, size, size);
@@ -297,10 +317,10 @@ function makeStripedBumpTexture(stripes = 24) {
     ctx.fillRect(i * stripeWidth, 0, stripeWidth * 0.6, size);
   }
 
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
-  texture.repeat.set(4, 4);
-  return texture;
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(4, 4);
+  return tex;
 }
 
 function makeNoiseTexture() {
@@ -308,29 +328,29 @@ function makeNoiseTexture() {
   const canvas = document.createElement('canvas');
   canvas.width = canvas.height = size;
   const ctx = canvas.getContext('2d');
-  if (!ctx) throw new Error('Failed to create 2D context');
+  if (!ctx) throw new Error('No 2D context');
 
-  const imageData = ctx.createImageData(size, size);
-  for (let i = 0; i < imageData.data.length; i += 4) {
-    const v = 100 + Math.random() * 80;
-    imageData.data[i] = v;
-    imageData.data[i + 1] = v;
-    imageData.data[i + 2] = v;
-    imageData.data[i + 3] = 255;
+  const img = ctx.createImageData(size, size);
+  for (let i = 0; i < img.data.length; i += 4) {
+    const v = 90 + Math.random() * 60;
+    img.data[i] = v;
+    img.data[i + 1] = v;
+    img.data[i + 2] = v;
+    img.data[i + 3] = 255;
   }
-  ctx.putImageData(imageData, 0, 0);
+  ctx.putImageData(img, 0, 0);
 
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
-  texture.repeat.set(6, 6);
-  return texture;
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(6, 6);
+  return tex;
 }
 
-/* -------------------------------------------------------------------------- */
-/*  HEXAGON HELPERS                                                           */
-/* -------------------------------------------------------------------------- */
+// ─────────────────────────────────────────────────────────────
+// Hex geometry helpers
+// ─────────────────────────────────────────────────────────────
 
-function hexVertices(scale = 1) {
+function hexVertices(scale = 1): THREE.Vector2[] {
   const verts: THREE.Vector2[] = [];
   for (let i = 0; i < 6; i++) {
     const angle = Math.PI / 6 + (Math.PI / 3) * i; // flat-top
@@ -343,8 +363,8 @@ function hexVertices(scale = 1) {
 function hexShape(scale = 1) {
   const verts = hexVertices(scale);
   const shape = new THREE.Shape();
-  verts.forEach((v, idx) => {
-    if (idx === 0) shape.moveTo(v.x, v.y);
+  verts.forEach((v, i) => {
+    if (i === 0) shape.moveTo(v.x, v.y);
     else shape.lineTo(v.x, v.y);
   });
   shape.closePath();
@@ -355,7 +375,7 @@ function makeHexExtrude(thickness: number, scale = 1, bevel = false) {
   return new THREE.ExtrudeGeometry(hexShape(scale), {
     depth: thickness,
     bevelEnabled: bevel,
-    bevelSegments: 1,
+    bevelSegments: bevel ? 1 : 0,
     bevelThickness: bevel ? thickness * 0.12 : 0,
     bevelSize: bevel ? 0.004 : 0
   });
@@ -377,7 +397,6 @@ function isInsideHex(point: THREE.Vector3, scale = 1) {
 }
 
 function samplePointInHex(scale = 0.9) {
-  // simple rejection sampling in bounding box
   while (true) {
     const x = (Math.random() * 2 - 1) * HEX_RADIUS * scale;
     const z = (Math.random() * 2 - 1) * HEX_RADIUS * scale;
@@ -386,9 +405,9 @@ function samplePointInHex(scale = 0.9) {
   }
 }
 
-/* -------------------------------------------------------------------------- */
-/*  ELECTRODE LANE GEOMETRY (RADIAL TRAVELLING-WAVE)                          */
-/* -------------------------------------------------------------------------- */
+// ─────────────────────────────────────────────────────────────
+// Radial electrode lanes
+// ─────────────────────────────────────────────────────────────
 
 function createRadialElectrodeLanes(
   material: THREE.Material,
@@ -398,35 +417,44 @@ function createRadialElectrodeLanes(
   const radialLength = HEX_APOTHEM * 1.7;
 
   for (let i = 0; i < ELECTRODE_SEGMENTS; i++) {
-    const laneGeom = new THREE.BoxGeometry(radialLength, LANE_HEIGHT, LANE_WIDTH);
+    const laneGeom = new THREE.BoxGeometry(
+      radialLength,
+      PANEL_THICKNESS * 0.45,
+      0.012
+    );
     const lane = new THREE.Mesh(laneGeom, material);
     const angle = (i / ELECTRODE_SEGMENTS) * Math.PI * 2;
 
     lane.rotation.y = angle;
-    lane.position.y = yPosition - 0.0006;
+    lane.position.y = yPosition;
     lane.castShadow = true;
     lane.receiveShadow = true;
-    group.add(lane);
 
-    const laneEdge = new LineSegments(
-      new EdgesGeometry(laneGeom, 12),
-      new LineBasicMaterial({ color: 0x3a2b1c })
+    const edge = new LineSegments(
+      new EdgesGeometry(laneGeom),
+      new LineBasicMaterial({
+        color: 0x3a2b1c,
+        transparent: true,
+        opacity: 0.5
+      })
     );
-    laneEdge.position.copy(lane.position);
-    laneEdge.rotation.copy(lane.rotation);
-    group.add(laneEdge);
+    edge.position.copy(lane.position);
+    edge.rotation.copy(lane.rotation);
+
+    group.add(lane);
+    group.add(edge);
   }
 
-  // Concentric ring electrode
+  // Concentric ring near the center
   const ringGeom = new THREE.RingGeometry(
-    HEX_APOTHEM * 0.25,
-    HEX_APOTHEM * 0.48,
+    HEX_APOTHEM * 0.22,
+    HEX_APOTHEM * 0.46,
     48,
     1
   );
   const ring = new THREE.Mesh(ringGeom, material);
   ring.rotation.x = -Math.PI / 2;
-  ring.position.y = yPosition;
+  ring.position.y = yPosition + PANEL_THICKNESS * 0.12;
   ring.castShadow = true;
   ring.receiveShadow = true;
   group.add(ring);
@@ -434,9 +462,9 @@ function createRadialElectrodeLanes(
   return group;
 }
 
-/* -------------------------------------------------------------------------- */
-/*  MODULE GEOMETRY                                                           */
-/* -------------------------------------------------------------------------- */
+// ─────────────────────────────────────────────────────────────
+// Module construction (geometry + materials)
+// ─────────────────────────────────────────────────────────────
 
 function createModule(scene: THREE.Scene): {
   group: THREE.Group;
@@ -444,46 +472,134 @@ function createModule(scene: THREE.Scene): {
 } {
   const group = new THREE.Group();
 
-  const bumpTexture = makeStripedBumpTexture(ELECTRODE_SEGMENTS * 4);
-  const roughnessTexture = makeNoiseTexture();
+  const bumpTexture = makeStripedBumpTexture(ELECTRODE_SEGMENTS * 2);
+  const roughTexture = makeNoiseTexture();
 
-  const frameMat = new THREE.MeshStandardMaterial({
-    color: 0x30343f,
-    metalness: 0.78,
-    roughness: 0.32,
-    roughnessMap: roughnessTexture
-  });
-
+  // Base + chassis
   const chassisMat = new THREE.MeshStandardMaterial({
     color: 0x1c1f26,
     metalness: 0.85,
     roughness: 0.45,
-    roughnessMap: roughnessTexture
+    roughnessMap: roughTexture
   });
 
+  const baseGeom = makeHexExtrude(BASE_THICKNESS, 1.08, true);
+  baseGeom.rotateX(Math.PI / 2);
+  const chassis = new THREE.Mesh(baseGeom, chassisMat);
+  chassis.position.y = BASE_THICKNESS / 2;
+  chassis.castShadow = true;
+  chassis.receiveShadow = true;
+  group.add(chassis);
+
+  // Perimeter frame
+  const frameMat = new THREE.MeshStandardMaterial({
+    color: 0x30343f,
+    metalness: 0.78,
+    roughness: 0.32,
+    roughnessMap: roughTexture
+  });
+
+  const frameGeom = makeHexExtrude(0.003, 1.05, true);
+  frameGeom.rotateX(Math.PI / 2);
+  const frame = new THREE.Mesh(frameGeom, frameMat);
+  frame.position.y = BASE_THICKNESS + 0.0015;
+  frame.castShadow = true;
+  frame.receiveShadow = true;
+  group.add(frame);
+
+  // Trench (collector ring)
+  const trenchShape = hexShape(TRENCH_OUTER_SCALE);
+  const inner = hexShape(TRENCH_INNER_SCALE);
+  trenchShape.holes.push(inner);
+  const trenchGeom = new THREE.ExtrudeGeometry(trenchShape, {
+    depth: CARTRIDGE_HEIGHT,
+    bevelEnabled: false
+  });
+  trenchGeom.rotateX(Math.PI / 2);
+  const trenchMat = new THREE.MeshStandardMaterial({
+    color: 0x2b2f38,
+    metalness: 0.4,
+    roughness: 0.55
+  });
+  const trench = new THREE.Mesh(trenchGeom, trenchMat);
+  trench.position.y = BASE_THICKNESS + 0.0005;
+  trench.receiveShadow = true;
+  group.add(trench);
+
+  // Removable cartridge
+  const cartridgeMat = new THREE.MeshStandardMaterial({
+    color: 0x3d434f,
+    metalness: 0.35,
+    roughness: 0.62
+  });
+  const cartridgeGeom = makeHexExtrude(
+    CARTRIDGE_HEIGHT * 0.9,
+    TRENCH_OUTER_SCALE * 0.98
+  );
+  cartridgeGeom.rotateX(Math.PI / 2);
+  const cartridge = new THREE.Mesh(cartridgeGeom, cartridgeMat);
+  cartridge.position.y = BASE_THICKNESS + CARTRIDGE_HEIGHT / 2;
+  cartridge.receiveShadow = true;
+  group.add(cartridge);
+
+  // Transparent dielectric substrate
   const substrateMaterial = new THREE.MeshPhysicalMaterial({
     color: 0x4466aa,
     transparent: true,
-    transmission: 0.75,
+    transmission: 0.78,
     opacity: 0.82,
     metalness: 0.05,
-    roughness: 0.12,
-    clearcoat: 0.4,
-    clearcoatRoughness: 0.25,
+    roughness: 0.16,
+    clearcoat: 0.42,
+    clearcoatRoughness: 0.28,
     ior: 1.48,
-    envMapIntensity: 1.2,
+    envMapIntensity: 1.3,
     thickness: SUBSTRATE_THICKNESS
   });
 
+  const substrateGeom = makeHexExtrude(SUBSTRATE_THICKNESS, 0.96);
+  substrateGeom.rotateX(Math.PI / 2);
+  const substrate = new THREE.Mesh(substrateGeom, substrateMaterial);
+  substrate.position.y =
+    BASE_THICKNESS + SUBSTRATE_THICKNESS / 2 + 0.00025;
+  substrate.castShadow = true;
+  substrate.receiveShadow = true;
+  group.add(substrate);
+
+  const substrateEdges = new LineSegments(
+    new EdgesGeometry(substrateGeom, 30),
+    new LineBasicMaterial({
+      color: 0x9cb2ff,
+      transparent: true,
+      opacity: 0.65
+    })
+  );
+  substrateEdges.position.copy(substrate.position);
+  group.add(substrateEdges);
+
+  // Panel (electrode support mesh)
   const panelMaterial = new THREE.MeshStandardMaterial({
     color: 0x8fb0ff,
     metalness: 0.72,
     roughness: 0.28,
     bumpMap: bumpTexture,
     bumpScale: 0.08,
-    roughnessMap: roughnessTexture
+    roughnessMap: roughTexture
   });
 
+  const panelGeom = makeHexExtrude(PANEL_THICKNESS, 0.94);
+  panelGeom.rotateX(Math.PI / 2);
+  const panel = new THREE.Mesh(panelGeom, panelMaterial);
+  panel.position.y =
+    BASE_THICKNESS +
+    SUBSTRATE_THICKNESS +
+    PANEL_THICKNESS / 2 +
+    0.0002;
+  panel.castShadow = true;
+  panel.receiveShadow = true;
+  group.add(panel);
+
+  // Radial electrodes on top of panel
   const laneMaterial = new THREE.MeshStandardMaterial({
     color: 0xffd080,
     metalness: 0.92,
@@ -494,6 +610,13 @@ function createModule(scene: THREE.Scene): {
     bumpScale: 0.12
   });
 
+  const lanes = createRadialElectrodeLanes(
+    laneMaterial,
+    panel.position.y + PANEL_THICKNESS / 2 - PANEL_THICKNESS * 0.35
+  );
+  group.add(lanes);
+
+  // Transparent cover plate
   const coverMaterial = new THREE.MeshPhysicalMaterial({
     color: 0xa5bfff,
     transparent: true,
@@ -510,114 +633,6 @@ function createModule(scene: THREE.Scene): {
     envMapIntensity: 1.8
   });
 
-  const conduitMat = new THREE.MeshStandardMaterial({
-    color: 0x1f222c,
-    metalness: 0.4,
-    roughness: 0.6,
-    roughnessMap: roughnessTexture
-  });
-
-  const dockingMat = new THREE.MeshStandardMaterial({
-    color: 0x5a6472,
-    metalness: 0.7,
-    roughness: 0.35
-  });
-
-  const connectorMat = new THREE.MeshStandardMaterial({
-    color: 0xffac4b,
-    metalness: 1.0,
-    roughness: 0.3,
-    emissive: new THREE.Color(0x332000),
-    emissiveIntensity: 0.2
-  });
-
-  /* -------------------------- Base / chassis / trench -------------------------- */
-
-  const baseGeom = makeHexExtrude(BASE_THICKNESS, 1.08, true);
-  baseGeom.rotateX(Math.PI / 2);
-  const chassis = new THREE.Mesh(baseGeom, chassisMat);
-  chassis.position.y = BASE_THICKNESS / 2;
-  chassis.castShadow = true;
-  chassis.receiveShadow = true;
-  group.add(chassis);
-
-  const frameGeom = makeHexExtrude(0.003, 1.05, true);
-  frameGeom.rotateX(Math.PI / 2);
-  const frame = new THREE.Mesh(frameGeom, frameMat);
-  frame.position.y = BASE_THICKNESS + 0.0015;
-  frame.castShadow = true;
-  frame.receiveShadow = true;
-  group.add(frame);
-
-  const trenchShape = hexShape(TRENCH_OUTER_SCALE);
-  const inner = hexShape(TRENCH_INNER_SCALE);
-  trenchShape.holes.push(inner);
-  const trenchGeom = new THREE.ExtrudeGeometry(trenchShape, {
-    depth: CARTRIDGE_HEIGHT,
-    bevelEnabled: false
-  });
-  trenchGeom.rotateX(Math.PI / 2);
-  const trenchBaseMat = new THREE.MeshStandardMaterial({
-    color: 0x2b2f38,
-    metalness: 0.4,
-    roughness: 0.55
-  });
-  const trench = new THREE.Mesh(trenchGeom, trenchBaseMat);
-  trench.position.y = BASE_THICKNESS + 0.0005;
-  trench.receiveShadow = true;
-  group.add(trench);
-
-  const cartridgeMat = new THREE.MeshStandardMaterial({
-    color: 0x3d434f,
-    metalness: 0.35,
-    roughness: 0.62
-  });
-  const cartridgeGeom = makeHexExtrude(CARTRIDGE_HEIGHT * 0.9, TRENCH_OUTER_SCALE * 0.98);
-  cartridgeGeom.rotateX(Math.PI / 2);
-  const cartridge = new THREE.Mesh(cartridgeGeom, cartridgeMat);
-  cartridge.position.y = BASE_THICKNESS + CARTRIDGE_HEIGHT / 2;
-  cartridge.receiveShadow = true;
-  group.add(cartridge);
-
-  /* ----------------------------- Substrate layer ------------------------------ */
-
-  const substrateGeom = makeHexExtrude(SUBSTRATE_THICKNESS, 0.96);
-  substrateGeom.rotateX(Math.PI / 2);
-  const substrate = new THREE.Mesh(substrateGeom, substrateMaterial);
-  substrate.position.y =
-    BASE_THICKNESS + SUBSTRATE_THICKNESS / 2 + 0.00025;
-  substrate.castShadow = true;
-  substrate.receiveShadow = true;
-  group.add(substrate);
-
-  const substrateEdges = new LineSegments(
-    new EdgesGeometry(substrateGeom, 30),
-    new LineBasicMaterial({ color: 0x9cb2ff, transparent: true, opacity: 0.65 })
-  );
-  substrateEdges.position.copy(substrate.position);
-  group.add(substrateEdges);
-
-  /* -------------------------- Electrode support panel ------------------------- */
-
-  const panelGeom = makeHexExtrude(PANEL_THICKNESS, 0.94);
-  panelGeom.rotateX(Math.PI / 2);
-  const panel = new THREE.Mesh(panelGeom, panelMaterial);
-  panel.position.y =
-    BASE_THICKNESS + SUBSTRATE_THICKNESS + PANEL_THICKNESS / 2 + 0.0002;
-  panel.castShadow = true;
-  panel.receiveShadow = true;
-  group.add(panel);
-
-  /* --------------------- Radial electrode lanes + ring ------------------------ */
-
-  const lanes = createRadialElectrodeLanes(
-    laneMaterial,
-    panel.position.y + PANEL_THICKNESS / 2 - LANE_HEIGHT / 2 - 0.0002
-  );
-  group.add(lanes);
-
-  /* ---------------------------- Transparent cover ----------------------------- */
-
   const coverGeom = makeHexExtrude(COVER_THICKNESS, 0.96, true);
   coverGeom.rotateX(Math.PI / 2);
   const cover = new THREE.Mesh(coverGeom, coverMaterial);
@@ -629,11 +644,16 @@ function createModule(scene: THREE.Scene): {
 
   const coverEdges = new LineSegments(
     new EdgesGeometry(coverGeom, 30),
-    new LineBasicMaterial({ color: 0xbdd5ff, transparent: true, opacity: 0.9 })
+    new LineBasicMaterial({
+      color: 0xbdd5ff,
+      transparent: true,
+      opacity: 0.9
+    })
   );
   coverEdges.position.copy(cover.position);
   group.add(coverEdges);
 
+  // Metallic bezel hugging the glass
   const coverBezelGeom = makeHexExtrude(0.002, 0.99);
   coverBezelGeom.rotateX(Math.PI / 2);
   const coverBezelMat = new THREE.MeshStandardMaterial({
@@ -650,13 +670,16 @@ function createModule(scene: THREE.Scene): {
 
   const coverEdgeOutline = new LineSegments(
     new EdgesGeometry(coverBezelGeom),
-    new LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.12 })
+    new LineBasicMaterial({
+      color: 0xffffff,
+      transparent: true,
+      opacity: 0.12
+    })
   );
   coverEdgeOutline.position.copy(coverBezel.position);
   group.add(coverEdgeOutline);
 
-  /* ---------------------- Mounting holes on each vertex ---------------------- */
-
+  // Mounting holes at each vertex
   const mountHoleGeom = new THREE.CylinderGeometry(
     0.007,
     0.007,
@@ -676,29 +699,46 @@ function createModule(scene: THREE.Scene): {
     group.add(hole);
   });
 
-  /* ------------------------- Embedded telemetry conduit ---------------------- */
+  // Embedded conduit (curved tube through chassis)
+  const conduitMat = new THREE.MeshStandardMaterial({
+    color: 0x1f222c,
+    metalness: 0.4,
+    roughness: 0.6,
+    roughnessMap: roughTexture
+  });
 
-  const conduitGeomInternal = new THREE.TubeGeometry(
-    new THREE.QuadraticBezierCurve3(
-      new THREE.Vector3(-HEX_APOTHEM * 0.2, BASE_THICKNESS * 0.4, -HEX_APOTHEM * 0.4),
-      new THREE.Vector3(0, BASE_THICKNESS * 0.8, 0),
-      new THREE.Vector3(HEX_APOTHEM * 0.35, BASE_THICKNESS * 0.45, HEX_APOTHEM * 0.25)
-    ),
-    18,
-    CABLE_RADIUS,
-    12,
-    false
+  const conduitCurve = new THREE.QuadraticBezierCurve3(
+    new THREE.Vector3(-HEX_APOTHEM * 0.2, BASE_THICKNESS * 0.4, -HEX_APOTHEM * 0.4),
+    new THREE.Vector3(0, BASE_THICKNESS * 0.9, 0),
+    new THREE.Vector3(
+      HEX_APOTHEM * 0.35,
+      BASE_THICKNESS * 0.55,
+      HEX_APOTHEM * 0.25
+    )
   );
-  const conduitInternal = new THREE.Mesh(conduitGeomInternal, conduitMat);
-  conduitInternal.castShadow = true;
-  conduitInternal.receiveShadow = true;
-  group.add(conduitInternal);
+  const conduitGeom = new THREE.TubeGeometry(conduitCurve, 18, 0.012, 12, false);
+  const conduit = new THREE.Mesh(conduitGeom, conduitMat);
+  conduit.castShadow = true;
+  conduit.receiveShadow = true;
+  group.add(conduit);
 
-  /* --------------------------- Edge docking rails ---------------------------- */
+  // Edge docking rails + pogo pins
+  const dockingMat = new THREE.MeshStandardMaterial({
+    color: 0x5a6472,
+    metalness: 0.7,
+    roughness: 0.35
+  });
+  const connectorMat = new THREE.MeshStandardMaterial({
+    color: 0xffac4b,
+    metalness: 1.0,
+    roughness: 0.3,
+    emissive: new THREE.Color(0x332000),
+    emissiveIntensity: 0.2
+  });
 
-  const edgeVerts = hexVertices(1.02);
   const railGeom = new RoundedBoxGeometry(0.12, 0.04, 0.08, 4, 0.014);
   const pogoGeom = new THREE.CylinderGeometry(0.005, 0.005, 0.02, 10);
+  const edgeVerts = hexVertices(1.02);
 
   for (let i = 0; i < edgeVerts.length; i++) {
     const a = edgeVerts[i];
@@ -725,8 +765,7 @@ function createModule(scene: THREE.Scene): {
     group.add(pogo);
   }
 
-  /* ----------------------- Telemetry connector + cable ----------------------- */
-
+  // Telemetry connector + cable shroud
   const shellGeom = new THREE.CylinderGeometry(0.03, 0.03, 0.11, 24);
   const shell = new THREE.Mesh(shellGeom, connectorMat);
   shell.rotation.z = Math.PI / 2;
@@ -734,14 +773,6 @@ function createModule(scene: THREE.Scene): {
   shell.castShadow = true;
   shell.receiveShadow = true;
   group.add(shell);
-
-  const socketBaseGeom = new RoundedBoxGeometry(0.09, 0.018, 0.06, 5, 0.006);
-  socketBaseGeom.rotateZ(Math.PI / 2);
-  const socketBase = new THREE.Mesh(socketBaseGeom, dockingMat);
-  socketBase.position.set(shell.position.x - 0.012, BASE_THICKNESS + 0.021, shell.position.z);
-  socketBase.castShadow = true;
-  socketBase.receiveShadow = true;
-  group.add(socketBase);
 
   const grommetGeom = new THREE.TorusGeometry(0.032, 0.005, 12, 24);
   const grommet = new THREE.Mesh(grommetGeom, conduitMat);
@@ -751,10 +782,14 @@ function createModule(scene: THREE.Scene): {
 
   const cableCurve = new THREE.QuadraticBezierCurve3(
     new THREE.Vector3(shell.position.x + 0.05, BASE_THICKNESS + 0.05, shell.position.z),
-    new THREE.Vector3(shell.position.x + CABLE_SWEEP * 0.4, BASE_THICKNESS + 0.08, shell.position.z + 0.06),
-    new THREE.Vector3(shell.position.x + CABLE_SWEEP, BASE_THICKNESS + 0.04, shell.position.z + 0.1)
+    new THREE.Vector3(
+      shell.position.x + 0.7 * 0.45,
+      BASE_THICKNESS + 0.08,
+      shell.position.z + 0.06
+    ),
+    new THREE.Vector3(shell.position.x + 0.7, BASE_THICKNESS + 0.04, shell.position.z + 0.1)
   );
-  const cableGeom = new THREE.TubeGeometry(cableCurve, 24, CABLE_RADIUS, 12, false);
+  const cableGeom = new THREE.TubeGeometry(cableCurve, 24, 0.012, 12, false);
   const cable = new THREE.Mesh(cableGeom, conduitMat);
   cable.castShadow = true;
   cable.receiveShadow = true;
@@ -763,11 +798,14 @@ function createModule(scene: THREE.Scene): {
   const cableShroudGeom = new THREE.TubeGeometry(
     cableCurve,
     16,
-    CABLE_RADIUS * 1.35,
+    0.012 * 1.35,
     8,
     false
   );
-  const cableShroud = new THREE.Mesh(cableShroudGeom, conduitMat.clone());
+  const cableShroud = new THREE.Mesh(
+    cableShroudGeom,
+    conduitMat.clone()
+  );
   (cableShroud.material as THREE.MeshStandardMaterial).opacity = 0.7;
   (cableShroud.material as THREE.MeshStandardMaterial).transparent = true;
   cableShroud.position.y -= 0.002;
@@ -790,9 +828,9 @@ function createModule(scene: THREE.Scene): {
   return { group, materials };
 }
 
-/* -------------------------------------------------------------------------- */
-/*  DUST PARTICLES + PHYSICS                                                  */
-/* -------------------------------------------------------------------------- */
+// ─────────────────────────────────────────────────────────────
+// Dust particles + dynamics
+// ─────────────────────────────────────────────────────────────
 
 type DustParticle = {
   mesh: THREE.Mesh;
@@ -810,30 +848,6 @@ type DustParticle = {
 function sampleRadius() {
   const t = Math.random();
   return DUST_RADIUS_MIN + (DUST_RADIUS_MAX - DUST_RADIUS_MIN) * Math.pow(t, 1.8);
-}
-
-function spawnDustParticle(
-  geom: THREE.SphereGeometry,
-  material: THREE.Material
-): DustParticle {
-  const mesh = new THREE.Mesh(geom, material);
-  mesh.castShadow = true;
-
-  const particle: DustParticle = {
-    mesh,
-    position: new THREE.Vector3(),
-    velocity: new THREE.Vector3(),
-    radius: 0,
-    mass: 0,
-    charge: 0,
-    adhesion: 0,
-    attached: true,
-    collected: false,
-    collectTimer: 0
-  };
-
-  respawnParticle(particle, true);
-  return particle;
 }
 
 function respawnParticle(p: DustParticle, fresh = false) {
@@ -861,12 +875,7 @@ function respawnParticle(p: DustParticle, fresh = false) {
     PANEL_SURFACE_Y + 0.002 + Math.random() * 0.02,
     spawnPoint.z
   );
-
-  p.velocity.set(
-    (Math.random() - 0.5) * 0.01,
-    0,
-    (Math.random() - 0.5) * 0.01
-  );
+  p.velocity.set((Math.random() - 0.5) * 0.01, 0, (Math.random() - 0.5) * 0.01);
 
   p.mesh.position.copy(p.position);
 
@@ -874,6 +883,30 @@ function respawnParticle(p: DustParticle, fresh = false) {
     p.mesh.rotation.set(0, 0, 0);
     p.mesh.scale.set(1, 1, 1);
   }
+}
+
+function spawnDustParticle(
+  geom: THREE.SphereGeometry,
+  material: THREE.Material
+): DustParticle {
+  const mesh = new THREE.Mesh(geom, material);
+  mesh.castShadow = true;
+
+  const p: DustParticle = {
+    mesh,
+    position: new THREE.Vector3(),
+    velocity: new THREE.Vector3(),
+    radius: 0,
+    mass: 0,
+    charge: 0,
+    adhesion: 0,
+    attached: true,
+    collected: false,
+    collectTimer: 0
+  };
+
+  respawnParticle(p, true);
+  return p;
 }
 
 function createDustField(scene: THREE.Scene) {
@@ -889,18 +922,19 @@ function createDustField(scene: THREE.Scene) {
   const particles: DustParticle[] = [];
   for (let i = 0; i < NUM_DUST_PARTICLES; i++) {
     const p = spawnDustParticle(dustGeom, dustMat);
-    p.mesh.position.copy(p.position);
     particles.push(p);
     scene.add(p.mesh);
   }
   return particles;
 }
 
-/* Electric field at a point (radial travelling wave lanes) */
+// Electric field: vertical + tangential traveling wave + drift
 function computeFieldAt(position: THREE.Vector3, time: number) {
   const angle = Math.atan2(position.z, position.x);
-  const sector =
-    ((angle + Math.PI) / (2 * Math.PI)) * ELECTRODE_SEGMENTS;
+  const radius = Math.sqrt(position.x * position.x + position.z * position.z);
+  const rNorm = THREE.MathUtils.clamp(radius / HEX_APOTHEM, 0, 1);
+
+  const sector = ((angle + Math.PI) / (2 * Math.PI)) * ELECTRODE_SEGMENTS;
   const laneIndex = Math.max(
     0,
     Math.min(ELECTRODE_SEGMENTS - 1, Math.floor(sector))
@@ -908,24 +942,27 @@ function computeFieldAt(position: THREE.Vector3, time: number) {
   const phase =
     time * 2 * Math.PI * WAVE_FREQUENCY + laneIndex * PHASE_SHIFT;
 
-  const Ey = FIELD_BASE + FIELD_TRAVEL * Math.sin(phase);
-  const tangential = FIELD_LATERAL * Math.cos(phase);
-  const radialKick = FIELD_LATERAL * 0.25 * Math.sin(phase + Math.PI / 4);
+  const Ey =
+    FIELD_BASE + FIELD_TRAVEL * Math.sin(phase) * (1 - 0.35 * rNorm);
+
+  const tangentialMag = FIELD_LATERAL * Math.cos(phase) * (0.4 + 0.6 * rNorm);
+  const radialMag = FIELD_LATERAL * 0.25 * Math.sin(phase + Math.PI / 4);
 
   const radialDir = new THREE.Vector3(
     Math.cos(angle),
     0,
     Math.sin(angle)
-  );
-  const tangentDir = new THREE.Vector3(
+  ).normalize();
+  const tangentialDir = new THREE.Vector3(
     -Math.sin(angle),
     0,
     Math.cos(angle)
-  );
+  ).normalize();
 
   const horizontal = radialDir
-    .multiplyScalar(radialKick)
-    .add(tangentDir.multiplyScalar(tangential))
+    .clone()
+    .multiplyScalar(radialMag)
+    .add(tangentialDir.clone().multiplyScalar(tangentialMag))
     .add(DIRECTIONAL_DRIFT);
 
   return new THREE.Vector3(horizontal.x, Ey, horizontal.z);
@@ -933,6 +970,7 @@ function computeFieldAt(position: THREE.Vector3, time: number) {
 
 function stepDust(particles: DustParticle[], dt: number, time: number) {
   const panelY = PANEL_SURFACE_Y;
+  const boundsScale = BOUNDS_SCALE;
 
   for (const p of particles) {
     if (p.collected) {
@@ -944,6 +982,7 @@ function stepDust(particles: DustParticle[], dt: number, time: number) {
     }
 
     const field = computeFieldAt(p.position, time);
+
     const Fy = p.charge * field.y - p.mass * MARTIAN_GRAVITY;
     const Fx = p.charge * field.x;
     const Fz = p.charge * field.z;
@@ -969,9 +1008,12 @@ function stepDust(particles: DustParticle[], dt: number, time: number) {
     p.velocity.y += ay * dt;
     p.velocity.z += az * dt;
 
+    // simple drag
     p.velocity.multiplyScalar(1 - DRAG_COEFF * dt);
+
     p.position.addScaledVector(p.velocity, dt);
 
+    // panel collision / bounce
     if (p.position.y < panelY) {
       p.position.y = panelY;
       p.velocity.y *= -0.22;
@@ -979,18 +1021,18 @@ function stepDust(particles: DustParticle[], dt: number, time: number) {
       p.velocity.z *= 0.92;
     }
 
-    /* Visual streaking based on speed */
+    // elongate particles when fast → streaking effect
     const speed = p.velocity.length();
-    const stretch = THREE.MathUtils.clamp(1 + speed * 12, 1, 3.8);
+    const stretch = THREE.MathUtils.clamp(1 + speed * 10, 1, 3.5);
     if (speed > 1e-4) {
       const dir = p.velocity.clone().normalize();
       const quat = new THREE.Quaternion();
       quat.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
       p.mesh.quaternion.copy(quat);
     }
-    p.mesh.scale.set(1, Math.max(0.7, 1 + speed * 2.4), stretch);
+    p.mesh.scale.set(1, Math.max(0.7, 1 + speed * 1.8), stretch);
 
-    /* Collection into trench / cartridge region */
+    // Trench collection region
     if (
       !isInsideHex(p.position, TRENCH_INNER_SCALE) &&
       p.position.y < BASE_THICKNESS + CARTRIDGE_HEIGHT * 2
@@ -1005,8 +1047,11 @@ function stepDust(particles: DustParticle[], dt: number, time: number) {
       }
     }
 
-    /* Out-of-bounds respawn */
-    if (!isInsideHex(p.position, BOUNDS_SCALE) || p.position.y > 2.5) {
+    // Bounds / escape → respawn
+    if (
+      !isInsideHex(p.position, boundsScale) ||
+      p.position.y > MAX_DUST_HEIGHT
+    ) {
       respawnParticle(p);
       continue;
     }
@@ -1015,20 +1060,23 @@ function stepDust(particles: DustParticle[], dt: number, time: number) {
   }
 }
 
-/* -------------------------------------------------------------------------- */
-/*  PUBLIC ENTRYPOINT                                                         */
-/* -------------------------------------------------------------------------- */
+// ─────────────────────────────────────────────────────────────
+// Scene bootstrap
+// ─────────────────────────────────────────────────────────────
 
-export function initAncilliaScene(container: HTMLElement): void {
-  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+export function initAncilliaScene(container: HTMLElement) {
+  const renderer = new THREE.WebGLRenderer({
+    antialias: true,
+    alpha: true
+  });
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.2;
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setSize(container.clientWidth, container.clientHeight);
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-  renderer.setSize(container.clientWidth, container.clientHeight);
   container.appendChild(renderer.domElement);
 
   const scene = new THREE.Scene();
@@ -1052,7 +1100,7 @@ export function initAncilliaScene(container: HTMLElement): void {
   controls.dampingFactor = 0.1;
   controls.target.set(0, 0.25, 0);
 
-  /* Lights */
+  // Lighting
   const ambient = new THREE.AmbientLight(0x0d1018, 0.34);
   scene.add(ambient);
 
@@ -1090,6 +1138,7 @@ export function initAncilliaScene(container: HTMLElement): void {
   scene.add(accent);
   scene.add(accent.target);
 
+  // Ground disk
   const groundGeom = new THREE.CircleGeometry(12, 64);
   const groundMat = new THREE.MeshStandardMaterial({
     color: 0x0b0d16,
@@ -1102,21 +1151,22 @@ export function initAncilliaScene(container: HTMLElement): void {
   ground.receiveShadow = true;
   scene.add(ground);
 
-  const { group: module, materials: moduleMaterials } = createModule(scene);
+  // Module + dust
+  const { group: module, materials } = createModule(scene);
   const dust = createDustField(scene);
 
   const modeStatusEl = document.getElementById('mode-status');
-  applyMode('blueprint', moduleMaterials, modeStatusEl);
+  applyMode('blueprint', materials, modeStatusEl);
 
   let currentMode: 'concept' | 'blueprint' = 'blueprint';
   window.addEventListener('keydown', (event) => {
     if (event.key === '1' && currentMode !== 'concept') {
       currentMode = 'concept';
-      applyMode('concept', moduleMaterials, modeStatusEl);
+      applyMode('concept', materials, modeStatusEl);
     }
     if (event.key === '2' && currentMode !== 'blueprint') {
       currentMode = 'blueprint';
-      applyMode('blueprint', moduleMaterials, modeStatusEl);
+      applyMode('blueprint', materials, modeStatusEl);
     }
   });
 
@@ -1128,7 +1178,6 @@ export function initAncilliaScene(container: HTMLElement): void {
 
     module.rotation.y += delta * 0.2;
     stepDust(dust, delta, elapsed);
-
     controls.update();
     renderer.render(scene, camera);
   }
@@ -1141,5 +1190,6 @@ export function initAncilliaScene(container: HTMLElement): void {
     camera.updateProjectionMatrix();
     renderer.setSize(clientWidth, clientHeight);
   };
+
   window.addEventListener('resize', handleResize);
 }
