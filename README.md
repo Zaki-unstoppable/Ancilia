@@ -6,9 +6,9 @@ Electrodynamic Dust Shielding Module (EDSM)
 
 This repo contains a small Three.js demo that visualizes a layered Ancillia module with:
 
-- Hexagonal 38 cm flat-to-flat footprint with beveled carbon/metal base, removable perimeter trench, and cartridge-like dust collector ring.
-- Transparent cover and substrate (dielectric stack) with rim-lit edges, tuned IOR, and a visible bezel to separate the glass layers from the chassis.
-- Radial + concentric electrode mesh on a fused-silica support, plus inset pogo-pin edge rails and a curved telemetry cable breakout.
+- Hexagonal 38 cm flat-to-flat footprint with a beveled carbon/metal base, perimeter frame, recessed conduit, removable trench, and cartridge-like dust collector ring for chaining modules.
+- Transparent cover plate and substrate (dielectric stack) with rim-lit edges, tuned IOR, and a visible metallic bezel so the glass layers read distinctly against the chassis.
+- Radial + concentric electrode mesh on fused-silica support, inset pogo-pin edge rails, curved telemetry cable breakout, and visible electrode lanes with docking hardware and rounded chassis detailing.
 - Traveling-wave dust animation driven by per-particle charge, mass, adhesion thresholds, and a radial sector electric field tuned for Mars gravity.
 - Simple reflective environment lighting (PMREM) over a dark backdrop plus procedural textures (no external assets required).
 - Mode toggle: press **1** for the "Concept Demo" palette (benchtop prototype vibe) or **2** for the "Blueprint" palette (production-grade reference).
