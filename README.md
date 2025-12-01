@@ -6,12 +6,21 @@ Electrodynamic Dust Shielding Module (EDSM)
 
 This repo contains a small Three.js demo that visualizes a layered Ancillia module with:
 
+ codex/implement-electrodynamic-dust-physics-simulation-46k6tb
 - Hexagonal 38 cm flat-to-flat footprint with a beveled carbon/metal base, perimeter frame, recessed conduit, removable trench, and cartridge-like dust collector ring for chaining modules.
 - Transparent cover plate and substrate (dielectric stack) with rim-lit edges, tuned IOR, and a visible metallic bezel so the glass layers read distinctly against the chassis.
 - Radial + concentric electrode mesh on fused-silica support, inset pogo-pin edge rails, curved telemetry cable breakout, and visible electrode lanes with docking hardware and rounded chassis detailing.
 - Traveling-wave dust animation driven by per-particle charge, mass, adhesion thresholds, and a radial sector electric field tuned for Mars gravity.
 - Simple reflective environment lighting (PMREM) over a dark backdrop plus procedural textures (no external assets required).
 - Mode toggle: press **1** for the "Concept Demo" palette (benchtop prototype vibe) or **2** for the "Blueprint" palette (production-grade reference).
+
+- Transparent cover plate and substrate to represent the dielectric stack, now rim-lit with subtle edge outlines for visual separation.
+- Electrode lanes on the EDS surface with metallic rails and docking hardware.
+- Rounded chassis with perimeter frame, recessed conduit, and external telemetry cable/connector.
+- Traveling-wave dust animation driven by per-particle charge, mass, and adhesion thresholds for a lab-inspired EDS response.
+- Simple reflective environment lighting (PMREM) over a dark backdrop plus procedural textures (no external assets required).
+- Metallic bezel around the cover plate to make the transparent stack visually distinct.
+ main
 
 ### Run the viewer
 
@@ -44,6 +53,7 @@ If you see a `403 Forbidden` when fetching `three` or other packages, try:
 - Verifying that no proxy or offline mirror is overriding the registry (check `npm config get registry`).
 
 Once dependencies resolve successfully, start the dev server with `npm run dev`.
+ codex/implement-electrodynamic-dust-physics-simulation-46k6tb
 
 ## Two-track build narrative
 
@@ -75,3 +85,5 @@ If you’re editing in Codex and pulling locally, use this flow to keep your mac
    ```
 
 With Vite running, subsequent `git pull` commands will trigger live reloads so you always preview the newest Codex changes.
+
+ main
