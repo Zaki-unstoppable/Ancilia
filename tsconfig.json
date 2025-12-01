@@ -10,8 +10,12 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "esModuleInterop": true,
+ codex/implement-electrodynamic-dust-physics-simulation-46k6tb
+    "noEmit": true
+
     "noEmit": true,
     "types": ["vite/client"]
+ main
   },
   "include": ["src"],
   "references": [{ "path": "./tsconfig.node.json" }]
