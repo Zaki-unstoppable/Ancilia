@@ -6,7 +6,6 @@ Electrodynamic Dust Shielding Module (EDSM)
 
 This repo contains a small Three.js demo that visualizes a layered Ancillia module with:
 
- codex/implement-electrodynamic-dust-physics-simulation-46k6tb
 - Hexagonal 38 cm flat-to-flat footprint with a beveled carbon/metal base, perimeter frame, recessed conduit, removable trench, and cartridge-like dust collector ring for chaining modules.
 - Transparent cover plate and substrate (dielectric stack) with rim-lit edges, tuned IOR, and a visible metallic bezel so the glass layers read distinctly against the chassis.
 - Radial + concentric electrode mesh on fused-silica support, inset pogo-pin edge rails, curved telemetry cable breakout, and visible electrode lanes with docking hardware and rounded chassis detailing.
