@@ -6,6 +6,33 @@ import * as THREE from 'three';
 const HEX_POINT = 0.44;
 const HEX_RADIUS = HEX_POINT / 2;
 
+function anisotropicNormal(size = 512, density = 26) {
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return null;
+
+  const img = ctx.createImageData(size, size);
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const idx = (y * size + x) * 4;
+      const streak = Math.sin((x / size) * Math.PI * density) * 0.5 + 0.5;
+      const noise = Math.random() * 0.15;
+      const v = 128 + (streak - 0.5) * 80 + noise * 255;
+      img.data[idx] = 128;
+      img.data[idx + 1] = v;
+      img.data[idx + 2] = 128;
+      img.data[idx + 3] = 255;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(3, 3);
+  tex.anisotropy = 4;
+  return tex;
+}
+
 // ===============================================================
 //  ADD-ON FOR: ancillia-scene.ts
 //  Enhances visuals WITHOUT modifying your core file.
@@ -31,6 +58,19 @@ export function enhanceAncilliaDevice(scene, module, materials) {
       obj.color.set(0xffe2b8);
     }
   });
+
+  // soft rim highlight to catch machined edges
+  const rimRing = new THREE.Mesh(
+    new THREE.RingGeometry(HEX_RADIUS * 0.95, HEX_RADIUS * 1.08, 6 * 8),
+    new THREE.MeshBasicMaterial({
+      color: 0x9fc8ff,
+      transparent: true,
+      opacity: 0.08,
+    })
+  );
+  rimRing.rotation.x = -Math.PI / 2;
+  rimRing.position.y = 0.0005;
+  scene.add(rimRing);
 
   // -------------------------------------------------------------
   // 1) THIN-FILM INTERFERENCE (Rainbow Gold Electrodes)
@@ -101,6 +141,13 @@ export function enhanceAncilliaDevice(scene, module, materials) {
   // -------------------------------------------------------------
   // 2) CHROMATIC FALLOFF + MICRO-DUST on COVER GLASS
   // -------------------------------------------------------------
+
+  // add micro-scratch normal to sell physical glass
+  const scratchNormal = anisotropicNormal(512, 18);
+  if (scratchNormal) {
+    materials.cover.normalMap = scratchNormal;
+    materials.cover.normalScale = new THREE.Vector2(0.2, 0.45);
+  }
 
   // Tiny noise texture as roughness map (micro dust)
   const dustSize = 256;
@@ -179,7 +226,7 @@ export function enhanceAncilliaDevice(scene, module, materials) {
     });
     const layer = new THREE.Mesh(g, m);
     layer.rotation.x = -Math.PI / 2;
-    layer.position.y = topY - off;
+    layer.position.y = topY + off;
     stackGroup.add(layer);
   });
 
