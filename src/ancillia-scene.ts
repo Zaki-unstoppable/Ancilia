@@ -1356,4 +1356,44 @@ window.addEventListener('resize', handleResize);
 //  ADD ENHANCEMENTS HERE (correct placement inside function)
 enhanceAncilliaDevice(scene, module, materials);
 
+
+  }
+  if (event.key === '2' && currentMode !== 'blueprint') {
+    currentMode = 'blueprint';
+    applyMode('blueprint', materials, modeStatusEl);
+  }
+});
+
+const clock = new THREE.Clock();
+
+function animate() {
+  const delta = clock.getDelta();
+  const elapsed = clock.elapsedTime;
+
+  // Module animation
+  module.rotation.y += delta * 0.16;
+
+  // Dust physics
+  stepDust(dust, delta, elapsed);
+
+  controls.update();
+  renderer.render(scene, camera);
+ main
+}
+
+renderer.setAnimationLoop(animate);
+
+// Resize handling
+const handleResize = () => {
+  const { clientWidth, clientHeight } = container;
+  camera.aspect = clientWidth / clientHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(clientWidth, clientHeight);
+};
+
+window.addEventListener('resize', handleResize);
+
+//  ADD ENHANCEMENTS HERE (correct placement inside function)
+enhanceAncilliaDevice(scene, module, materials);
+
 }
