@@ -159,7 +159,7 @@ export function initDeviceDustDemo(container: HTMLElement) {
   );
   cam.position.set(3.2, 2.6, 3.3);
 
-  const controls = new THREE.OrbitControls(cam, renderer.domElement);
+  const controls = new OrbitControls(cam, renderer.domElement);
   controls.target.set(0, 0.2, 0);
 
   // Lights
